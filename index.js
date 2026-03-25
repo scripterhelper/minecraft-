@@ -1,6 +1,6 @@
 const { createClient } = require('bedrock-protocol');
+const readline = require('readline');
 
-// Read secrets directly from environment variables (Railway)
 const host = process.env.SERVER_HOST;
 const port = parseInt(process.env.SERVER_PORT);
 const username = process.env.MICROSOFT_EMAIL;
@@ -10,46 +10,62 @@ if (!host || !port || !username) {
   process.exit(1);
 }
 
-console.log("Starting bot...");
-
+// Step 1: Create client in offline mode for safe login
 const client = createClient({
   host,
   port,
   username,
+  offline: true // prevents sending any packets yet
 });
 
-client.on('login', () => {
-  console.log('✅ Bot logged in successfully!');
-});
-
-client.on('join', () => {
-  console.log('🌍 Bot joined the server!');
-});
-
-client.on('spawn', () => {
-  console.log('🚀 Bot spawned in the world!');
-});
-
-client.on('text', (packet) => {
-  console.log('💬 Chat:', packet.message);
-});
-
-// Keep alive (anti-AFK)
-setInterval(() => {
-  if (client?.queue) {
-    client.queue('player_auth_input', {
-      pitch: 0,
-      yaw: 0,
-      position: { x: 0, y: 0, z: 0 },
-      moveVector: { x: 0, z: 0 },
-      headYaw: 0,
-      inputData: 0
-    });
-  }
-}, 5000);
-
-// First-time Microsoft login
+// Step 2: Pause before login
 client.on('xboxauth', (authUrl) => {
-  console.log(`📌 Open this URL in your browser to login: ${authUrl}`);
-  console.log('After logging in, the bot will continue automatically.');
+  console.log("📌 Microsoft Login URL:");
+  console.log(authUrl);
+  console.log("⏸ Bot paused. Copy the code and press ENTER to continue.");
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  rl.question("Press ENTER to continue connecting...", () => {
+    rl.close();
+    console.log("✅ Resuming bot connection...");
+
+    // Step 3: Reconnect in real mode
+    client.offline = false;
+    client.connect();
+  });
+});
+
+// Step 4: Wrap packet sending to avoid crashes on Geyser
+client.on('spawn', () => {
+  console.log("🚀 Bot spawned!");
+  setInterval(() => {
+    try {
+      if (client?.queue) {
+        client.queue('player_auth_input', {
+          pitch: 0,
+          yaw: 0,
+          position: { x: 0, y: 0, z: 0 },
+          moveVector: { x: 0, z: 0 },
+          headYaw: 0,
+          inputData: 0
+        });
+      }
+    } catch (err) {
+      console.warn("⚠️ Ignored packet error (server may be Geyser):", err.message);
+    }
+  }, 5000); // keeps bot alive
+});
+
+// Step 5: Safe chat logging
+client.on('text', (packet) => {
+  console.log("💬 Chat:", packet.message);
+});
+
+// Step 6: Error handling
+client.on('error', (err) => {
+  console.error("❌ Bot error:", err.message);
 });
