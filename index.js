@@ -43,8 +43,8 @@ setInterval(() => {
   }
 }, 5000);
 
-// Microsoft first-time login (OAuth)
+// Microsoft login first-time
 client.on('xboxauth', (authUrl) => {
   console.log(`📌 Open this URL in your browser to login: ${authUrl}`);
-  console.log('After logging in, your bot will continue automatically.');
+  console.log('After logging in, the bot will continue automatically.');
 });
