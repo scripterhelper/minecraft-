@@ -1,91 +1,42 @@
-const mc = require('bedrock-protocol');
-const { authenticate } = require('prismarine-auth');
+const bedrock = require('bedrock-protocol');
 
-const SERVER_HOST = process.env.SERVER_HOST || 'imcooldude423.aternos.me';
-const SERVER_PORT = parseInt(process.env.SERVER_PORT) || 59233;
-const USERNAME = process.env.MC_USERNAME || 'Bot';
-const RETRY_DELAY = 15000; // 15s retry
-const POST_MSA_DELAY = 20000; // 20s after login
+const HOST = process.env.SERVER_HOST || "localhost";
+const PORT = parseInt(process.env.SERVER_PORT) || 19132;
 
-let paused = false;
+const RETRY_DELAY = 20000; // 20 seconds after Microsoft login
 
-async function loginMicrosoft() {
-    console.log('[msa] Starting Microsoft login...');
-    paused = true;
+function startBot() {
+    console.log(`🌐 Connecting to ${HOST}:${PORT}...`);
 
-    const token = await authenticate({
-        clientId: '00000000402b5328', // Microsoft default client ID
-        scopes: ['XboxLive.signin', 'offline_access'],
-        redirectUri: 'https://login.live.com/oauth20_desktop.srf',
+    const client = bedrock.createClient({
+        host: HOST,
+        port: PORT,
+        username: "Bot_" + Math.floor(Math.random() * 1000),
+        version: "1.26.0",
+        profilesFolder: "./profiles" // saves Microsoft login
     });
 
-    console.log('[msa] Microsoft signed in!');
-    console.log(`⏸ Waiting ${POST_MSA_DELAY / 1000}s before connecting...`);
-    await new Promise(res => setTimeout(res, POST_MSA_DELAY));
-    paused = false;
-
-    return token;
-}
-
-async function connectBot() {
-    if (paused) return;
-
-    console.log(`🌐 Target: ${SERVER_HOST}:${SERVER_PORT}`);
-
-    const methods = ['Microsoft', 'Offline', 'Basic'];
-    for (const method of methods) {
-        if (paused) return;
-
-        try {
-            console.log(`🚀 Trying method: ${method}`);
-            if (method === 'Microsoft') {
-                const token = await loginMicrosoft();
-                const client = mc.createClient({
-                    host: SERVER_HOST,
-                    port: SERVER_PORT,
-                    username: USERNAME,
-                    auth: 'msa',
-                    token
-                });
-                setupClientEvents(client);
-                return client;
-            } else if (method === 'Offline') {
-                const client = mc.createClient({
-                    host: SERVER_HOST,
-                    port: SERVER_PORT,
-                    username: USERNAME,
-                    offline: true
-                });
-                setupClientEvents(client);
-                return client;
-            } else if (method === 'Basic') {
-                const client = mc.createClient({
-                    host: SERVER_HOST,
-                    port: SERVER_PORT,
-                    username: USERNAME
-                });
-                setupClientEvents(client);
-                return client;
-            }
-        } catch (err) {
-            console.error(`❌ ${method} failed:`, err.message || err);
-        }
-    }
-
-    if (!paused) {
-        console.log(`⏳ Retrying ALL methods in ${RETRY_DELAY / 1000}s...`);
-        setTimeout(connectBot, RETRY_DELAY);
-    }
-}
-
-function setupClientEvents(client) {
-    client.on('connect', () => console.log('✅ Connected!'));
-    client.on('disconnect', (packet) => {
-        console.log('❌ Disconnected:', packet ? packet.reason || packet : 'Unknown');
-        if (!paused) setTimeout(connectBot, RETRY_DELAY);
+    client.on('connect', () => {
+        console.log("✅ Connected to server!");
     });
-    client.on('error', (err) => console.error('⚠️ Bot error:', err.message || err));
+
+    client.on('spawn', () => {
+        console.log("🌍 Spawned in world!");
+    });
+
+    client.on('disconnect', (reason) => {
+        console.log("❌ Disconnected:", reason);
+    });
+
+    client.on('error', (err) => {
+        console.log("⚠️ Error:", err.message);
+    });
+
+    client.on('close', () => {
+        console.log(`🔄 Waiting ${RETRY_DELAY/1000}s before reconnecting...`);
+        setTimeout(startBot, RETRY_DELAY);
+    });
 }
 
-// --- START ---
-connectBot();
+// Start the bot
+startBot();
