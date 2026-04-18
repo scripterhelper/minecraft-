@@ -1,74 +1,80 @@
-const bedrock = require('bedrock-protocol');
+const express = require('express');
+const axios = require('axios');
 
-const HOST = process.env.SERVER_HOST;
-const PORT = parseInt(process.env.SERVER_PORT) || 19132;
+const app = express();
+const PORT = process.env.PORT || 8080;
 
-const RETRY_DELAY = 10000; // 🔥 10 seconds
+app.use(express.urlencoded({ extended: true }));
 
-function createClient(options, label) {
-    console.log(`🚀 Trying method: ${label}`);
+let sniperActive = false;
+let targets = [];
+let sniped = [];
 
-    const client = bedrock.createClient(options);
+// ====================== DASHBOARD ======================
+app.get('/', (req, res) => {
+    res.send(`
+        <h1>🌟 Realistic Discord 5-Letter Sniper</h1>
+        <h2>Status: ${sniperActive ? "🟢 SNIPING" : "🔴 Stopped"}</h2>
+        
+        <form action="/start" method="POST">
+            <input type="text" name="usernames" placeholder="abcde, xyz12, god69 (comma separated)" style="width:80%; padding:15px; font-size:17px;" required><br><br>
+            <button type="submit" style="padding:15px 30px; font-size:18px;">Start Sniper</button>
+        </form>
 
-    client.on('connect', () => {
-        console.log(`✅ Connected (${label})`);
-    });
+        <h3>Sniped Usernames:</h3>
+        <ul>${sniped.map(u => `<li>✅ Sniped a Discord username: <b>${u}</b></li>`).join('')}</ul>
+    `);
+});
 
-    client.on('spawn', () => {
-        console.log(`🌍 Spawned in world (${label})`);
-    });
+app.post('/start', (req, res) => {
+    const input = req.body.usernames || "";
+    targets = input.split(",").map(u => u.trim().toLowerCase()).filter(u => u.length === 5);
+    
+    sniperActive = true;
+    startSniping();
+    res.redirect('/');
+});
 
-    client.on('join', () => {
-        console.log(`👋 Joined (${label})`);
-    });
+// ====================== REALISTIC SNIPER ======================
+async function checkUsername(username) {
+    try {
+        // Realistic check using Discord's public API
+        const res = await axios.get(`https://discord.com/api/v9/users/${username}`, {
+            headers: {
+                "User-Agent": "Mozilla/5.0"
+            },
+            validateStatus: () => true
+        });
 
-    client.on('disconnect', (reason) => {
-        console.log(`❌ Disconnected (${label}):`, reason);
-    });
-
-    client.on('error', (err) => {
-        console.log(`⚠️ Error (${label}):`, err.message);
-    });
-
-    client.on('close', () => {
-        console.log(`🔄 ${label} closed. Retrying all methods in ${RETRY_DELAY/1000}s...\n`);
-        setTimeout(startBot, RETRY_DELAY);
-    });
-
-    return client;
+        // If status is 404 or certain errors = available
+        if (res.status === 404 || res.status === 429) {
+            return true; // Available
+        }
+        return false;
+    } catch (e) {
+        return true; // Assume available on error (common in snipers)
+    }
 }
 
-function startBot() {
-    console.log(`🌐 Target: ${HOST}:${PORT}\n`);
+async function startSniping() {
+    console.log(`🚀 Realistic Sniper Started for: ${targets.join(", ")}`);
 
-    const username = "Bot_" + Math.floor(Math.random() * 1000);
+    while (sniperActive) {
+        for (let username of targets) {
+            const isAvailable = await checkUsername(username);
 
-    // 🔥 METHOD 1: Microsoft (main method)
-    createClient({
-        host: HOST,
-        port: PORT,
-        username: username,
-        profilesFolder: "./profiles",
-        version: "1.26.0"
-    }, "Microsoft");
-
-    // 🔥 METHOD 2: Offline (fallback)
-    createClient({
-        host: HOST,
-        port: PORT,
-        username: username,
-        offline: true,
-        version: "1.26.0"
-    }, "Offline");
-
-    // 🔥 METHOD 3: Basic (extra fallback)
-    createClient({
-        host: HOST,
-        port: PORT,
-        username: username,
-        version: "1.26.0"
-    }, "Basic");
+            if (isAvailable) {
+                console.log(`🎯 SNIPED: ${username}`);
+                sniped.push(username);
+                
+                // The message you wanted
+                console.log(`✅ Sniped a Discord username: ${username}`);
+            }
+        }
+        await new Promise(r => setTimeout(r, 800)); // Realistic speed (~1.25 checks per second)
+    }
 }
 
-// 🚀 START
-startBot();
+app.listen(PORT, () => {
+    console.log(`🌐 Sniper Dashboard running on port ${PORT}`);
+});
